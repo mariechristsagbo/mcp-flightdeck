@@ -45,8 +45,9 @@ Workflow execution and policy evaluation should have predictable inputs, outputs
 apps/
   cli/                 # `flightdeck` command-line interface
 packages/
-  protocol/            # transport adapters and normalized protocol events
+  protocol/            # normalized protocol events and the message channel port
   recorder/            # redaction, event ordering, trace persistence
+  replay/              # replaying a recorded session against a channel
   workflow/            # parser, runner, variable resolution, assertions
   contracts/           # snapshots and semantic diffing
   policy/              # policy model and deterministic evaluation
@@ -56,6 +57,11 @@ docs/
 ```
 
 The packages model independent product primitives. The CLI composes them but does not contain protocol semantics itself.
+
+Each package keeps one reason to change. `protocol` owns the event model and the
+`MessageChannel` port; concrete transports implement that port without depending
+on the layers that consume it, and `replay` drives the port instead of opening
+connections itself.
 
 ## Event model
 
