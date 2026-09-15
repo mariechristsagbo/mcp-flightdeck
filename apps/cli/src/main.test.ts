@@ -1,12 +1,22 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
-const CLI_ENTRYPOINT = fileURLToPath(new URL("./main.ts", import.meta.url));
+const execFileAsync = promisify(execFile);
+const CLI_ENTRYPOINT = fileURLToPath(
+  new URL("../../../dist/apps/cli/src/main.js", import.meta.url),
+);
 const FIXTURE_SERVER = fileURLToPath(
   new URL("../../../packages/fixtures/src/echo-server.ts", import.meta.url),
 );
+
+beforeAll(async () => {
+  await execFileAsync("npm", ["run", "build", "--silent"], {
+    cwd: fileURLToPath(new URL("../../../", import.meta.url)),
+  });
+});
 
 describe("flightdeck inspect", () => {
   it("prints a JSON inspection report for a stdio MCP server", async () => {
