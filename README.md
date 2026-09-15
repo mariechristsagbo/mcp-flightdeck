@@ -30,13 +30,14 @@ MCP Flightdeck will create durable, redacted artifacts for answering those quest
 
 ## Current CLI
 
-The first command inspects a local MCP server over stdio. It negotiates `initialize`, sends `notifications/initialized`, and lists the negotiated tools, resources, and prompts as JSON.
+The first commands inspect or record a local MCP server over stdio. Both negotiate `initialize`, send `notifications/initialized`, and discover the negotiated tools, resources, and prompts. `record` writes the ordered exchange as a redacted trace artifact.
 
 ```bash
 npm run flightdeck -- inspect --command <server-command> --arg <server-argument>
+npm run flightdeck -- record --command <server-command> --arg <server-argument> --output .flightdeck/runs/inspection.fdtrace.json
 ```
 
-Use one `--arg` per server argument. The current command has a 10-second request timeout; override it with `--timeout <milliseconds>` when needed. It supports only local stdio servers today—remote Streamable HTTP/SSE and OAuth are not implemented.
+Use one `--arg` per server argument. The commands have a 10-second request timeout; override it with `--timeout <milliseconds>` when needed. `record` preserves an `interrupted` trace when discovery fails after the process starts. Both commands support only local stdio servers today—remote Streamable HTTP/SSE and OAuth are not implemented.
 
 ## Planned CLI
 
