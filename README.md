@@ -75,6 +75,7 @@ The project will be a TypeScript monorepo with a CLI-first core. The initial bou
 ```text
 packages/
   protocol/     MCP transport adapters and normalized events
+  inspect/      MCP initialization and capability discovery
   recorder/     trace capture, redaction, and persistence
   workflow/     workflow parsing, execution, and assertions
   contracts/    snapshots and semantic diffs
