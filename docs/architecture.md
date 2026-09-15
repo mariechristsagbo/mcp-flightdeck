@@ -74,11 +74,11 @@ The raw payload is retained only after structured redaction. Derived summaries m
 
 The first implementation will define three versioned formats:
 
-| Artifact | Purpose | Initial storage |
-| --- | --- | --- |
-| `fdtrace` | Ordered, redacted protocol-session evidence | JSON |
-| `fdworkflow` | Reproducible interaction and assertions | YAML |
-| `fdcontract` | Server capability and surface snapshot | JSON |
+| Artifact     | Purpose                                     | Initial storage |
+| ------------ | ------------------------------------------- | --------------- |
+| `fdtrace`    | Ordered, redacted protocol-session evidence | JSON            |
+| `fdworkflow` | Reproducible interaction and assertions     | YAML            |
+| `fdcontract` | Server capability and surface snapshot      | JSON            |
 
 Each format carries a `formatVersion`. Format migrations must be explicit and tested.
 
