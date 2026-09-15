@@ -8,6 +8,7 @@
     "noUnusedParameters": true,
     "strict": true,
     "target": "ES2024",
+    "types": ["node"],
     "verbatimModuleSyntax": true
   },
   "include": ["apps/**/*.ts", "packages/**/*.ts", "types/**/*.d.ts"]
