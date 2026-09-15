@@ -2,10 +2,10 @@ import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 
+import { parseTraceDocument } from "./trace-document-parser.js";
 import {
   serializeTraceDocument,
   type TraceDocument,
-  type TraceStatus,
 } from "./trace-document.js";
 
 const TRACE_FILE_MODE = 0o600;
@@ -46,13 +46,22 @@ export async function writeTraceDocument(
 
 export async function readTraceDocument(path: string): Promise<TraceDocument> {
   const serializedTrace = await readFile(path, "utf8");
-  const parsedTrace: unknown = JSON.parse(serializedTrace);
+  const parsedTrace = parseSerializedTrace(serializedTrace);
+  const trace = parseTraceDocument(parsedTrace);
 
-  if (!isTraceDocument(parsedTrace)) {
+  if (trace === null) {
     throw new Error(`Invalid trace artifact: ${path}`);
   }
 
-  return parsedTrace;
+  return trace;
+}
+
+function parseSerializedTrace(serializedTrace: string): unknown {
+  try {
+    return JSON.parse(serializedTrace);
+  } catch {
+    return null;
+  }
 }
 
 function hasCode(error: unknown, code: string): boolean {
@@ -62,27 +71,4 @@ function hasCode(error: unknown, code: string): boolean {
     "code" in error &&
     error.code === code
   );
-}
-
-function isTraceDocument(value: unknown): value is TraceDocument {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    value.formatVersion === 1 &&
-    typeof value.id === "string" &&
-    typeof value.startedAt === "string" &&
-    isTraceStatus(value.status) &&
-    typeof value.durationMs === "number" &&
-    Array.isArray(value.events)
-  );
-}
-
-function isTraceStatus(value: unknown): value is TraceStatus {
-  return value === "completed" || value === "interrupted";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
