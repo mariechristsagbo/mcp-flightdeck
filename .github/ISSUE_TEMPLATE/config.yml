@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/mariechristsagbo/mcp-flightdeck/security/advisories/new
+    about: Report vulnerabilities privately. Do not disclose them in public issues.
+  - name: Contribution guide
+    url: https://github.com/mariechristsagbo/mcp-flightdeck/blob/main/CONTRIBUTING.md
+    about: Read the contribution workflow before opening an issue or pull request.

@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a focused improvement to MCP Flightdeck.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start with the problem and user outcome. Avoid proposing a large bundle of unrelated features in one request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who has this problem, and what is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the behavior a user should be able to observe.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Optional. Keep the proposal focused and mention alternatives considered.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: MCP context
+      description: Include relevant client, transport, server capability, trace, or CI context. Redact sensitive values.
+    validations:
+      required: false
