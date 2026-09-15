@@ -147,6 +147,8 @@ describe("flightdeck record", () => {
 
       expect(result.code).toBe(1);
       expect(result.stderr).toContain(`Trace artifact: ${output}`);
+      expect(result.stderr).toContain("Recording interrupted.");
+      expect(result.stderr).not.toContain("MCP server process exited");
       expect(JSON.parse(await readFile(output, "utf8"))).toMatchObject({
         status: "interrupted",
       });
