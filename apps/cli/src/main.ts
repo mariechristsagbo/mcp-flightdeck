@@ -1,6 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 
 import { inspectStdioServer } from "../../../packages/inspect/src/inspect-server.js";
+import { createEventRecorder } from "../../../packages/recorder/src/event-recorder.js";
+import { writeTraceDocument } from "../../../packages/recorder/src/trace-file-store.js";
+import { createTraceDocument } from "../../../packages/recorder/src/trace-document.js";
 
 const CLIENT_INFO = {
   name: "mcp-flightdeck",
@@ -16,13 +20,18 @@ export async function run(argv: readonly string[]): Promise<string> {
     options: {
       arg: { type: "string", multiple: true },
       command: { type: "string" },
+      output: { type: "string" },
       timeout: { type: "string" },
     },
   });
+  const command = positionals[0];
 
-  if (positionals.length !== 1 || positionals[0] !== "inspect") {
+  if (
+    positionals.length !== 1 ||
+    (command !== "inspect" && command !== "record")
+  ) {
     throw new Error(
-      "Usage: flightdeck inspect --command <command> [--arg <argument>]",
+      "Usage: flightdeck <inspect|record> --command <command> [--arg <argument>]",
     );
   }
 
@@ -30,15 +39,65 @@ export async function run(argv: readonly string[]): Promise<string> {
     throw new Error("--command is required.");
   }
 
-  const requestTimeoutMs = parseTimeout(values.timeout);
-  const report = await inspectStdioServer({
+  const options = {
     command: values.command,
     args: values.arg ?? [],
     clientInfo: CLIENT_INFO,
-    requestTimeoutMs,
-  });
+    requestTimeoutMs: parseTimeout(values.timeout),
+  };
 
-  return `${JSON.stringify(report, null, 2)}\n`;
+  if (command === "inspect") {
+    const report = await inspectStdioServer(options);
+    return `${JSON.stringify(report, null, 2)}\n`;
+  }
+
+  if (values.output === undefined || values.output.length === 0) {
+    throw new Error("--output is required for record.");
+  }
+
+  return recordInspection(options, values.output);
+}
+
+async function recordInspection(
+  options: Parameters<typeof inspectStdioServer>[0],
+  outputPath: string,
+): Promise<string> {
+  const recorder = createEventRecorder({ transport: { kind: "stdio" } });
+  const startedAt = new Date().toISOString();
+  let failure: unknown;
+
+  try {
+    await inspectStdioServer({
+      ...options,
+      onMessage(direction, message) {
+        recorder.record(direction, message);
+      },
+    });
+  } catch (error: unknown) {
+    failure = error;
+  }
+
+  const trace = createTraceDocument({
+    id: randomUUID(),
+    startedAt,
+    status: failure === undefined ? "completed" : "interrupted",
+    events: recorder.events,
+  });
+  await writeTraceDocument(outputPath, trace);
+
+  if (failure !== undefined) {
+    const message =
+      failure instanceof Error ? failure.message : String(failure);
+    throw new Error(
+      `Recording interrupted. Trace artifact: ${outputPath}. ${message}`,
+    );
+  }
+
+  return `${JSON.stringify(
+    { path: outputPath, id: trace.id, status: trace.status },
+    null,
+    2,
+  )}\n`;
 }
 
 function parseTimeout(value: string | undefined): number {
