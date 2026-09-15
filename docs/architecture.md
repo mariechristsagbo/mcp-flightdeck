@@ -45,7 +45,8 @@ Workflow execution and policy evaluation should have predictable inputs, outputs
 apps/
   cli/                 # `flightdeck` command-line interface
 packages/
-  protocol/            # normalized protocol events and the message channel port
+  protocol/            # normalized protocol events, wire codec, channel port
+  transports/          # concrete transports implementing the channel port
   recorder/            # redaction, event ordering, trace persistence
   replay/              # replaying a recorded session against a channel
   workflow/            # parser, runner, variable resolution, assertions
@@ -95,6 +96,10 @@ Each format carries a `formatVersion`. Format migrations must be explicit and te
 3. Legacy SSE — supported after the two primary paths have reliable test coverage.
 
 A transport adapter exposes normalized lifecycle and protocol events. It must not leak transport-specific implementation details into workflows.
+
+Adapters translate through the wire codec in `protocol`: `encodeJsonRpcMessage` on the way out, `decodeJsonRpcMessage` on the way in. A frame that is not a valid JSON-RPC message fails the channel instead of reaching a trace as a validated message, and a transport whose peer disappears fails pending reads rather than letting a replay wait forever.
+
+Fixtures are runnable processes, not mocks. `packages/fixtures` holds self-contained servers that speak the wire format over a real transport, so a transport change is tested against a real process boundary.
 
 ## Test strategy
 
