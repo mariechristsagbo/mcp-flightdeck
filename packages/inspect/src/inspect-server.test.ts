@@ -73,11 +73,14 @@ describe("inspectChannel", () => {
       },
     ]);
 
+    const observed: string[] = [];
     const report = await inspectChannel(fake.channel, {
       clientInfo: CLIENT_INFO,
       requestTimeoutMs: 100,
+      onMessage(direction, message) {
+        observed.push(`${direction}:${message.kind}`);
+      },
     });
-
     expect(report).toEqual<InspectionReport>({
       protocolVersion: "2025-06-18",
       capabilities: { tools: {} },
@@ -104,6 +107,13 @@ describe("inspectChannel", () => {
         id: "tools-list-2",
         method: "tools/list",
       },
+    ]);
+    expect(observed).toEqual([
+      "outbound:request",
+      "inbound:response",
+      "outbound:notification",
+      "outbound:request",
+      "inbound:response",
     ]);
     expect(fake.closeCalls).toBe(1);
   });
