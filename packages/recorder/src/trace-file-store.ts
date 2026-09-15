@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 
 import { parseTraceDocument } from "./trace-document-parser.js";
+import { redactTraceDocument } from "./redaction.js";
 import {
   serializeTraceDocument,
   type TraceDocument,
@@ -10,6 +11,14 @@ import {
 
 const TRACE_FILE_MODE = 0o600;
 
+/**
+ * Write a trace artifact.
+ *
+ * Credentials are removed before the artifact is written, so a stored trace is
+ * safe to keep, attach to an issue, or commit. A trace that carried credentials
+ * therefore does not read back byte-identical to the value handed in: the
+ * payload keeps a redaction record instead of the secret.
+ */
 export async function writeTraceDocument(
   path: string,
   trace: TraceDocument,
@@ -21,11 +30,15 @@ export async function writeTraceDocument(
   );
 
   await mkdir(directory, { recursive: true });
-  await writeFile(temporaryPath, `${serializeTraceDocument(trace)}\n`, {
-    encoding: "utf8",
-    flag: "wx",
-    mode: TRACE_FILE_MODE,
-  });
+  await writeFile(
+    temporaryPath,
+    `${serializeTraceDocument(redactTraceDocument(trace))}\n`,
+    {
+      encoding: "utf8",
+      flag: "wx",
+      mode: TRACE_FILE_MODE,
+    },
+  );
 
   try {
     await link(temporaryPath, path);
