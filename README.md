@@ -28,10 +28,19 @@ MCP Flightdeck will create durable, redacted artifacts for answering those quest
 - **Contracts** — capability snapshots and semantic diffs for tools, resources, prompts, schemas, and behavior-relevant metadata.
 - **Policies** — review rules and CI gates for unsafe or breaking changes.
 
+## Current CLI
+
+The first command inspects a local MCP server over stdio. It negotiates `initialize`, sends `notifications/initialized`, and lists the negotiated tools, resources, and prompts as JSON.
+
+```bash
+npm run flightdeck -- inspect --command <server-command> --arg <server-argument>
+```
+
+Use one `--arg` per server argument. The current command has a 10-second request timeout; override it with `--timeout <milliseconds>` when needed. It supports only local stdio servers today—remote Streamable HTTP/SSE and OAuth are not implemented.
+
 ## Planned CLI
 
 ```bash
-flightdeck inspect --server staging
 flightdeck record --server staging
 flightdeck workflow create --from-run run_01...
 flightdeck test .flightdeck/workflows/search-customer.yaml
@@ -39,7 +48,7 @@ flightdeck contract diff --baseline origin/main
 flightdeck policy check --policy .flightdeck/policies/production.yaml
 ```
 
-The CLI is not implemented yet. Commands above describe the intended public interface and may change before the first release.
+The commands above are planned and may change before the first release.
 
 ## Status
 

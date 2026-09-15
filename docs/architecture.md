@@ -47,6 +47,7 @@ apps/
 packages/
   protocol/            # normalized protocol events, wire codec, channel port
   transports/          # concrete transports implementing the channel port
+  inspect/             # initialize negotiation and capability discovery
   recorder/            # redaction, event ordering, trace persistence
   replay/              # replaying a recorded session against a channel
   workflow/            # parser, runner, variable resolution, assertions
