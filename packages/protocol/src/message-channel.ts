@@ -11,3 +11,15 @@ export type MessageChannel = Readonly<{
   receive: () => Promise<ProtocolMessage>;
   send: (message: ProtocolMessage) => Promise<void>;
 }>;
+
+/**
+ * A channel whose underlying process or connection is owned by the caller.
+ *
+ * `close` is composed here rather than folded into `MessageChannel` so a
+ * consumer that only exchanges messages — like a replay — cannot end up
+ * managing a resource it does not own.
+ */
+export type ManagedMessageChannel = MessageChannel &
+  Readonly<{
+    close: () => Promise<void>;
+  }>;
