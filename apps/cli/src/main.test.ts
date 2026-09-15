@@ -1,4 +1,7 @@
 import { execFile, spawn } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
@@ -49,6 +52,90 @@ describe("flightdeck inspect", () => {
     expect(result.code).toBe(1);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("--command is required");
+  });
+});
+
+describe("flightdeck record", () => {
+  it("persists a completed stdio inspection trace", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "flightdeck-record-"));
+    const output = join(directory, "inspection.fdtrace.json");
+
+    try {
+      const result = await runCli([
+        "record",
+        "--command",
+        process.execPath,
+        "--arg",
+        FIXTURE_SERVER,
+        "--output",
+        output,
+      ]);
+
+      expect(result.code).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        path: output,
+        status: "completed",
+      });
+
+      const trace = JSON.parse(await readFile(output, "utf8")) as {
+        events: { direction: string; message: { kind: string } }[];
+        status: string;
+      };
+      expect(trace.status).toBe("completed");
+      expect(trace.events).toEqual([
+        expect.objectContaining({
+          direction: "outbound",
+          message: {
+            kind: "request",
+            id: "initialize-1",
+            method: "initialize",
+            params: expect.any(Object),
+          },
+        }),
+        expect.objectContaining({
+          direction: "inbound",
+          message: {
+            kind: "response",
+            id: "initialize-1",
+            result: expect.any(Object),
+          },
+        }),
+        expect.objectContaining({
+          direction: "outbound",
+          message: {
+            kind: "notification",
+            method: "notifications/initialized",
+          },
+        }),
+        expect.objectContaining({
+          direction: "outbound",
+          message: {
+            kind: "request",
+            id: "tools-list-2",
+            method: "tools/list",
+          },
+        }),
+        expect.objectContaining({
+          direction: "inbound",
+          message: {
+            kind: "response",
+            id: "tools-list-2",
+            result: expect.any(Object),
+          },
+        }),
+      ]);
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
+  it("requires an output path", async () => {
+    const result = await runCli(["record", "--command", process.execPath]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("--output is required");
   });
 });
 
