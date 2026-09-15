@@ -1,4 +1,4 @@
-import type { JsonObject, JsonValue } from "../../protocol/src/json-value.js";
+import type { JsonValue } from "../../protocol/src/json-value.js";
 import type {
   ProtocolEvent,
   ProtocolMessage,
@@ -120,7 +120,7 @@ function redactValue(
     return value;
   }
 
-  const redacted: JsonObject = {};
+  const redacted: Record<string, JsonValue> = {};
   const entries: [string, JsonValue][] = Object.entries(value);
 
   for (const [key, entry] of entries) {
@@ -178,7 +178,5 @@ function redactString(
 }
 
 function isRedacted(value: JsonValue): boolean {
-  return typeof value === "string"
-    ? value.includes(REDACTED)
-    : value === REDACTED;
+  return typeof value === "string" && value.includes(REDACTED);
 }
