@@ -130,6 +130,31 @@ describe("flightdeck record", () => {
     }
   });
 
+  it("persists an interrupted trace when inspection fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "flightdeck-record-"));
+    const output = join(directory, "interrupted.fdtrace.json");
+
+    try {
+      const result = await runCli([
+        "record",
+        "--command",
+        process.execPath,
+        "--arg",
+        join(directory, "missing-server.ts"),
+        "--output",
+        output,
+      ]);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain(`Trace artifact: ${output}`);
+      expect(JSON.parse(await readFile(output, "utf8"))).toMatchObject({
+        status: "interrupted",
+      });
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
   it("requires an output path", async () => {
     const result = await runCli(["record", "--command", process.execPath]);
 
