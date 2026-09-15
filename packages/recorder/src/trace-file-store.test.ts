@@ -152,4 +152,52 @@ describe("trace file store", () => {
       `Invalid trace artifact: ${path}`,
     );
   });
+
+  it("redacts credentials before writing an artifact", async () => {
+    const directory = await createTemporaryDirectory();
+    const path = join(directory, "secrets.fdtrace.json");
+    const trace = createTraceDocument({
+      id: "run_secrets",
+      startedAt: "2026-09-15T08:00:00.000Z",
+      status: "completed",
+      events: [
+        {
+          sequence: 1,
+          atMs: 0,
+          direction: "outbound",
+          transport: { kind: "stdio" },
+          message: {
+            kind: "request",
+            id: "call-1",
+            method: "tools/call",
+            params: {
+              authorization: "Bearer super-secret-token",
+              email: "customer@example.com",
+            },
+          },
+          redactions: [],
+        },
+      ],
+    });
+
+    await writeTraceDocument(path, trace);
+
+    const artifact = await readFile(path, "utf8");
+    expect(artifact).not.toContain("super-secret-token");
+    expect(artifact).toContain("[REDACTED]");
+
+    const reloaded = await readTraceDocument(path);
+    expect(reloaded.events[0]?.message).toEqual({
+      kind: "request",
+      id: "call-1",
+      method: "tools/call",
+      params: { authorization: "[REDACTED]", email: "customer@example.com" },
+    });
+    expect(reloaded.events[0]?.redactions).toEqual([
+      {
+        path: "$.events[0].message.params.authorization",
+        reason: "sensitive",
+      },
+    ]);
+  });
 });
