@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -93,6 +93,63 @@ describe("trace file store", () => {
 
     await expect(writeTraceDocument(path, createTrace())).rejects.toThrow(
       `Trace artifact already exists: ${path}`,
+    );
+  });
+
+  it("rejects a persisted event with an invalid direction", async () => {
+    const directory = await createTemporaryDirectory();
+    const path = join(directory, "invalid-direction.fdtrace.json");
+
+    await writeFile(
+      path,
+      JSON.stringify({
+        ...createTrace(),
+        events: [
+          {
+            ...createEvent(1, 0),
+            direction: "sideways",
+          },
+        ],
+        durationMs: 0,
+      }),
+    );
+
+    await expect(readTraceDocument(path)).rejects.toThrow(
+      `Invalid trace artifact: ${path}`,
+    );
+  });
+
+  it("rejects a persisted trace with non-contiguous event sequences", async () => {
+    const directory = await createTemporaryDirectory();
+    const path = join(directory, "invalid-sequence.fdtrace.json");
+
+    await writeFile(
+      path,
+      JSON.stringify({
+        ...createTrace(),
+        events: [createEvent(1, 0), createEvent(3, 421)],
+      }),
+    );
+
+    await expect(readTraceDocument(path)).rejects.toThrow(
+      `Invalid trace artifact: ${path}`,
+    );
+  });
+
+  it("rejects a persisted trace with an inconsistent duration", async () => {
+    const directory = await createTemporaryDirectory();
+    const path = join(directory, "invalid-duration.fdtrace.json");
+
+    await writeFile(
+      path,
+      JSON.stringify({
+        ...createTrace(),
+        durationMs: 420,
+      }),
+    );
+
+    await expect(readTraceDocument(path)).rejects.toThrow(
+      `Invalid trace artifact: ${path}`,
     );
   });
 });
