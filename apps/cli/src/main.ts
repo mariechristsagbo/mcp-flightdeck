@@ -86,11 +86,7 @@ async function recordInspection(
   await writeTraceDocument(outputPath, trace);
 
   if (failure !== undefined) {
-    const message =
-      failure instanceof Error ? failure.message : String(failure);
-    throw new Error(
-      `Recording interrupted. Trace artifact: ${outputPath}. ${message}`,
-    );
+    throw new Error(`Recording interrupted. Trace artifact: ${outputPath}.`);
   }
 
   return `${JSON.stringify(
