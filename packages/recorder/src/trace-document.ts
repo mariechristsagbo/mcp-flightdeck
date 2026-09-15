@@ -34,7 +34,7 @@ export function createTraceDocument(
 }
 
 export function serializeTraceDocument(trace: TraceDocument): string {
-  return JSON.stringify(trace);
+  return JSON.stringify(trace, null, 2);
 }
 
 function assertContiguousSequences(events: readonly ProtocolEvent[]): void {
