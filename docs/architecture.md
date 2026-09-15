@@ -77,6 +77,8 @@ A normalized event is the boundary shared by the protocol, recorder, workflow, a
 
 The raw payload is retained only after structured redaction. Derived summaries must be reproducible from recorded events.
 
+Redaction runs inside the trace file store, not at the call site, so an artifact is safe by construction: a key whose name is a known credential field is replaced, a value that looks like a credential is replaced even under an unrelated key, and each replacement is recorded on its event with the payload path it came from. A stored trace is therefore evidence of what happened rather than a replayable copy — replaying a session that carried credentials requires supplying them separately.
+
 ## Artifact formats
 
 The first implementation will define three versioned formats:
