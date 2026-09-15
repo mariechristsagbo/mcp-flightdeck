@@ -2,6 +2,7 @@ import {
   isRecord,
   type JsonArray,
   type JsonObject,
+  type JsonValue,
 } from "../../protocol/src/json-value.js";
 import type { ManagedMessageChannel } from "../../protocol/src/message-channel.js";
 import type { ProtocolMessage } from "../../protocol/src/protocol-event.js";
@@ -145,24 +146,42 @@ async function listCapability(
     return undefined;
   }
 
-  const response = await exchange(
-    channel,
-    { kind: "request", id: nextId(), method },
-    requestTimeoutMs,
-  );
+  const entries: JsonValue[] = [];
+  let cursor: string | undefined;
 
-  if (response.kind === "error") {
-    throw new Error(`MCP ${method} failed: ${response.error.message}`);
-  }
+  do {
+    const response = await exchange(
+      channel,
+      {
+        kind: "request",
+        id: nextId(),
+        method,
+        ...(cursor === undefined ? {} : { params: { cursor } }),
+      },
+      requestTimeoutMs,
+    );
 
-  if (response.kind !== "response" || !isRecord(response.result)) {
-    throw new Error(`MCP ${method} returned an invalid response.`);
-  }
+    if (response.kind === "error") {
+      throw new Error(`MCP ${method} failed: ${response.error.message}`);
+    }
 
-  const entries = response.result[property];
-  if (!Array.isArray(entries)) {
-    throw new Error(`MCP ${method} returned no ${property} array.`);
-  }
+    if (response.kind !== "response" || !isRecord(response.result)) {
+      throw new Error(`MCP ${method} returned an invalid response.`);
+    }
+
+    const pageEntries = response.result[property];
+    if (!Array.isArray(pageEntries)) {
+      throw new Error(`MCP ${method} returned no ${property} array.`);
+    }
+
+    const nextCursor = response.result.nextCursor;
+    if (nextCursor !== undefined && typeof nextCursor !== "string") {
+      throw new Error(`MCP ${method} returned an invalid nextCursor.`);
+    }
+
+    entries.push(...pageEntries);
+    cursor = nextCursor;
+  } while (cursor !== undefined);
 
   return entries;
 }
@@ -172,13 +191,18 @@ async function exchange(
   request: InspectionRequest,
   requestTimeoutMs: number,
 ): Promise<ProtocolMessage> {
-  await channel.send(request);
+  const deadline = performance.now() + requestTimeoutMs;
+  await withTimeout(
+    channel.send(request),
+    request.method,
+    remainingTimeout(deadline, request.method),
+  );
 
   for (;;) {
     const received = await withTimeout(
       channel.receive(),
       request.method,
-      requestTimeoutMs,
+      remainingTimeout(deadline, request.method),
     );
 
     if (received.kind === "request") {
@@ -212,13 +236,24 @@ function parseInitializeResult(response: ProtocolMessage): Readonly<{
   const { capabilities, protocolVersion, serverInfo } = response.result;
   if (
     !isRecord(capabilities) ||
+    Array.isArray(capabilities) ||
     typeof protocolVersion !== "string" ||
-    !isRecord(serverInfo)
+    !isRecord(serverInfo) ||
+    Array.isArray(serverInfo)
   ) {
     throw new Error("MCP initialize response is missing required fields.");
   }
 
   return { capabilities, protocolVersion, serverInfo };
+}
+
+function remainingTimeout(deadline: number, operation: string): number {
+  const timeoutMs = deadline - performance.now();
+  if (timeoutMs <= 0) {
+    throw new Error(`Timed out waiting for ${operation}.`);
+  }
+
+  return timeoutMs;
 }
 
 function withTimeout<T>(
