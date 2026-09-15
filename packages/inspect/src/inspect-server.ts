@@ -33,6 +33,10 @@ export type InspectorClientInfo = Readonly<{
 
 export type InspectChannelOptions = Readonly<{
   clientInfo: InspectorClientInfo;
+  onMessage?: (
+    direction: "inbound" | "outbound",
+    message: ProtocolMessage,
+  ) => void;
   requestTimeoutMs: number;
 }>;
 
@@ -63,10 +67,12 @@ export async function inspectChannel(
     });
     const initialized = parseInitializeResult(initialize);
 
-    await channel.send({
+    const initializedMessage: ProtocolMessage = {
       kind: "notification",
       method: "notifications/initialized",
-    });
+    };
+    await channel.send(initializedMessage);
+    options.onMessage?.("outbound", initializedMessage);
 
     const tools = await listCapability(
       channel,
@@ -76,6 +82,7 @@ export async function inspectChannel(
       "tools",
       options.requestTimeoutMs,
       () => `tools-list-${String(nextRequest++)}`,
+      options.onMessage,
     );
     const resources = await listCapability(
       channel,
@@ -85,6 +92,7 @@ export async function inspectChannel(
       "resources",
       options.requestTimeoutMs,
       () => `resources-list-${String(nextRequest++)}`,
+      options.onMessage,
     );
     const prompts = await listCapability(
       channel,
@@ -94,6 +102,7 @@ export async function inspectChannel(
       "prompts",
       options.requestTimeoutMs,
       () => `prompts-list-${String(nextRequest++)}`,
+      options.onMessage,
     );
 
     return {
@@ -120,6 +129,7 @@ export async function inspectChannel(
       requestChannel,
       { kind: "request", id, method, params },
       options.requestTimeoutMs,
+      options.onMessage,
     );
   }
 }
@@ -127,10 +137,15 @@ export async function inspectChannel(
 export async function inspectStdioServer(
   options: InspectStdioServerOptions,
 ): Promise<InspectionReport> {
-  const { clientInfo, requestTimeoutMs, ...channelOptions } = options;
+  const { clientInfo, onMessage, requestTimeoutMs, ...channelOptions } =
+    options;
   const channel = spawnStdioChannel(channelOptions);
 
-  return inspectChannel(channel, { clientInfo, requestTimeoutMs });
+  return inspectChannel(channel, {
+    clientInfo,
+    requestTimeoutMs,
+    ...(onMessage === undefined ? {} : { onMessage }),
+  });
 }
 
 async function listCapability(
@@ -141,6 +156,7 @@ async function listCapability(
   property: string,
   requestTimeoutMs: number,
   nextId: () => string,
+  onMessage: InspectChannelOptions["onMessage"],
 ): Promise<JsonArray | undefined> {
   if (!Object.hasOwn(capabilities, capability)) {
     return undefined;
@@ -159,6 +175,7 @@ async function listCapability(
         ...(cursor === undefined ? {} : { params: { cursor } }),
       },
       requestTimeoutMs,
+      onMessage,
     );
 
     if (response.kind === "error") {
@@ -190,6 +207,7 @@ async function exchange(
   channel: ManagedMessageChannel,
   request: InspectionRequest,
   requestTimeoutMs: number,
+  onMessage: InspectChannelOptions["onMessage"],
 ): Promise<ProtocolMessage> {
   const deadline = performance.now() + requestTimeoutMs;
   await withTimeout(
@@ -197,6 +215,7 @@ async function exchange(
     request.method,
     remainingTimeout(deadline, request.method),
   );
+  onMessage?.("outbound", request);
 
   for (;;) {
     const received = await withTimeout(
@@ -204,6 +223,7 @@ async function exchange(
       request.method,
       remainingTimeout(deadline, request.method),
     );
+    onMessage?.("inbound", received);
 
     if (received.kind === "request") {
       throw new Error(
