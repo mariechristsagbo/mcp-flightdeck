@@ -1,9 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import {
-  createProtocolEvent,
-  type ProtocolEvent,
-} from "./protocol-event.js";
+import { createProtocolEvent, type ProtocolEvent } from "./protocol-event.js";
 
 describe("createProtocolEvent", () => {
   it("records an outbound initialize request with its transport context", () => {
