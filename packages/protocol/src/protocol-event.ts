@@ -1,12 +1,11 @@
-export type JsonPrimitive = boolean | null | number | string;
+import type { JsonValue } from "./json-value.js";
 
-export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
-
-export interface JsonArray extends ReadonlyArray<JsonValue> {}
-
-export interface JsonObject {
-  readonly [key: string]: JsonValue;
-}
+export type {
+  JsonArray,
+  JsonObject,
+  JsonPrimitive,
+  JsonValue,
+} from "./json-value.js";
 
 export type JsonRpcId = number | string;
 
