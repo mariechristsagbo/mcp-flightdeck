@@ -1,7 +1,9 @@
 import type { MessageChannel } from "../../protocol/src/message-channel.js";
 import {
   createProtocolEvent,
+  type JsonRpcErrorResponse,
   type JsonRpcId,
+  type JsonRpcResponse,
   type ProtocolEvent,
   type ProtocolMessage,
   type ProtocolTransport,
@@ -13,8 +15,10 @@ import {
 
 export type ReplayFailure = Readonly<{
   message: string;
-  phase: "receive" | "send";
+  phase: ReplayPhase;
 }>;
+
+export type ReplayPhase = "receive" | "respond" | "send";
 
 export type ReplayOutcome = Readonly<{
   failure: ReplayFailure | null;
@@ -30,19 +34,35 @@ export type ReplayTraceOptions = Readonly<{
   transport: ProtocolTransport;
 }>;
 
+type EventRecorder = Readonly<{
+  events: () => readonly ProtocolEvent[];
+  recordInbound: (message: ProtocolMessage) => void;
+  recordOutbound: (message: ProtocolMessage) => void;
+}>;
+
+type ReplyMessage = JsonRpcErrorResponse | JsonRpcResponse;
+
+type ExchangeOutcome =
+  | Readonly<{ failure: ReplayFailure; kind: "failed" }>
+  | Readonly<{ kind: "settled" }>;
+
 /**
- * Replay the outbound messages of a recorded session and capture the result as
- * a new trace.
+ * Replay the client-initiated messages of a recorded session and capture the
+ * result as a new trace.
  *
  * The source trace is evidence of what happened; the produced trace is evidence
- * of what happens now. Nothing observed during a replay is persisted here, and
- * no redaction is applied: both belong to the layers that own storage.
+ * of what happens now. Server-initiated requests are answered from the replies
+ * the source trace already recorded, so a replay never blocks waiting for a
+ * decision a recorded session had already made. Nothing observed here is
+ * persisted and no redaction is applied: both belong to the layers that own
+ * storage.
  */
 export async function replayTrace(
   options: ReplayTraceOptions,
 ): Promise<ReplayOutcome> {
   const { channel, clock, id, source, startedAt, transport } = options;
-  const events: ProtocolEvent[] = [];
+  const recorder = createEventRecorder(clock, transport);
+  const recordedReplies = collectRecordedReplies(source);
   let failure: ReplayFailure | null = null;
 
   for (const sourceEvent of source.events) {
@@ -51,8 +71,13 @@ export async function replayTrace(
     }
 
     const { message } = sourceEvent;
-    events.push(record("outbound", clock(), message, transport, events.length));
+    if (isReply(message)) {
+      // Replies are sent in response to a server-initiated request, not on
+      // their own schedule.
+      continue;
+    }
 
+    recorder.recordOutbound(message);
     try {
       await channel.send(message);
     } catch (error: unknown) {
@@ -64,14 +89,15 @@ export async function replayTrace(
       continue;
     }
 
-    try {
-      await collectUntilResponse(channel, message.id, (received) => {
-        events.push(
-          record("inbound", clock(), received, transport, events.length),
-        );
-      });
-    } catch (error: unknown) {
-      failure = { message: describeFailure(error), phase: "receive" };
+    const outcome = await completeExchange(
+      channel,
+      message.id,
+      recordedReplies,
+      recorder,
+    );
+
+    if (outcome.kind === "failed") {
+      failure = outcome.failure;
       break;
     }
   }
@@ -82,41 +108,110 @@ export async function replayTrace(
       id,
       startedAt,
       status: failure === null ? "completed" : "interrupted",
-      events,
+      events: recorder.events(),
     }),
   };
 }
 
-async function collectUntilResponse(
+async function completeExchange(
   channel: MessageChannel,
   requestId: JsonRpcId,
-  recordReceived: (message: ProtocolMessage) => void,
-): Promise<void> {
+  recordedReplies: ReadonlyMap<JsonRpcId, ReplyMessage>,
+  recorder: EventRecorder,
+): Promise<ExchangeOutcome> {
   for (;;) {
-    const received = await channel.receive();
-    recordReceived(received);
+    let received: ProtocolMessage;
+    try {
+      received = await channel.receive();
+    } catch (error: unknown) {
+      return fail("receive", describeFailure(error));
+    }
+
+    recorder.recordInbound(received);
+
+    if (received.kind === "request") {
+      const reply = recordedReplies.get(received.id);
+      if (reply === undefined) {
+        return fail(
+          "respond",
+          `Missing recorded reply for peer request ${String(received.id)}`,
+        );
+      }
+
+      recorder.recordOutbound(reply);
+      try {
+        await channel.send(reply);
+      } catch (error: unknown) {
+        return fail("send", describeFailure(error));
+      }
+
+      continue;
+    }
 
     if (isResponseTo(received, requestId)) {
-      return;
+      return { kind: "settled" };
     }
   }
 }
 
-function record(
-  direction: ProtocolEvent["direction"],
-  atMs: number,
-  message: ProtocolMessage,
+function fail(phase: ReplayPhase, message: string): ExchangeOutcome {
+  return { kind: "failed", failure: { message, phase } };
+}
+
+function createEventRecorder(
+  clock: () => number,
   transport: ProtocolTransport,
-  recordedEvents: number,
-): ProtocolEvent {
-  return createProtocolEvent({
-    sequence: recordedEvents + 1,
-    atMs,
-    direction,
-    transport,
-    message,
-    redactions: [],
-  });
+): EventRecorder {
+  const events: ProtocolEvent[] = [];
+
+  function record(
+    direction: ProtocolEvent["direction"],
+    message: ProtocolMessage,
+  ): void {
+    events.push(
+      createProtocolEvent({
+        sequence: events.length + 1,
+        atMs: clock(),
+        direction,
+        transport,
+        message,
+        redactions: [],
+      }),
+    );
+  }
+
+  return {
+    events: () => events,
+    recordInbound: (message) => {
+      record("inbound", message);
+    },
+    recordOutbound: (message) => {
+      record("outbound", message);
+    },
+  };
+}
+
+function collectRecordedReplies(
+  source: TraceDocument,
+): ReadonlyMap<JsonRpcId, ReplyMessage> {
+  const replies = new Map<JsonRpcId, ReplyMessage>();
+
+  for (const event of source.events) {
+    const { message } = event;
+    if (
+      event.direction === "outbound" &&
+      isReply(message) &&
+      message.id !== null
+    ) {
+      replies.set(message.id, message);
+    }
+  }
+
+  return replies;
+}
+
+function isReply(message: ProtocolMessage): message is ReplyMessage {
+  return message.kind === "response" || message.kind === "error";
 }
 
 function isResponseTo(message: ProtocolMessage, requestId: JsonRpcId): boolean {
